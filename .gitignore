@@ -1,2 +1,4 @@
 
 obj/
+/.vs/PublishingHouse.DAL
+/bin/Debug/net8.0
