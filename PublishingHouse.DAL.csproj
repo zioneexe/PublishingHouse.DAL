@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="20241116232452_InitialCreate.cs" />
+    <Compile Remove="20241116232452_InitialCreate.Designer.cs" />
+    <Compile Remove="20241117002246_RolesAdded.cs" />
+    <Compile Remove="20241117002246_RolesAdded.Designer.cs" />
+    <Compile Remove="Migrations\20241116232452_InitialCreate.cs" />
+    <Compile Remove="Migrations\20241116232452_InitialCreate.Designer.cs" />
+    <Compile Remove="PublishingHouseDbContextModelSnapshot.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PublishingHouse.Abstractions\PublishingHouse.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
