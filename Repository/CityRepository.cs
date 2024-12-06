@@ -1,65 +1,80 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class CityRepository(PublishingHouseDbContext context) : ICityRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<ICity>> GetAllAsync()
+    public class CityRepository(PublishingHouseDbContext context) : ICityRepository
     {
-        var cities = await context.Cities.Include(r => r.Region).ToListAsync();
+        public async Task AddAsync(ICity entity)
+        {
+            if (entity is City cityEntity)
+            {
+                await context.Cities.AddAsync(cityEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type City.");
+            }
+        }
 
-        return cities.Cast<ICity>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var city = await context.Cities.FindAsync(id);
+            if (city is null)
+            {
+                throw new RepositoryException($"City with id {id} was not found.");
+            }
 
-    public async Task<ICity?> GetByIdAsync(int id)
-    {
-        return await context.Cities.Include(r => r.Region)
-            .FirstOrDefaultAsync(a => a.CityId == id);
-    }
+            context.Cities.Remove(city);
+        }
 
-    public async Task<ICity> AddAsync(ICity city)
-    {
-        ArgumentNullException.ThrowIfNull(city, nameof(city));
+        public async Task<IEnumerable<ICity>> GetAllAsync()
+        {
+            return await context.Cities.Include(c => c.Region).ToListAsync();
+        }
 
-        var entity = city.ToEntity();
-        await context.Cities.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<ICity> GetByIdAsync(int id)
+        {
+            var city = await context.Cities.Include(c => c.Region)
+                .FirstOrDefaultAsync(c => c.CityId == id);
+            if (city is null)
+            {
+                throw new RepositoryException($"City with id {id} was not found.");
+            }
 
-        return entity;
-    }
+            return city;
+        }
 
-    public async Task<ICity?> UpdateAsync(int id, ICity city)
-    {
-        ArgumentNullException.ThrowIfNull(city, nameof(city));
+        public async Task UpdateAsync(int id, ICity entity)
+        {
+            var existingCity = await context.Cities.FindAsync(id);
+            if (existingCity is null)
+            {
+                throw new RepositoryException($"City with id {id} was not found.");
+            }
 
-        var existingCity = await context.Cities.FindAsync(id);
-        if (existingCity == null) return null;
+            if (entity is City cityEntity)
+            {
+                existingCity.RegionId = cityEntity.RegionId;
+                existingCity.Name = cityEntity.Name;
+                existingCity.UpdateDateTime = cityEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type City.");
+            }
+        }
 
-        var updatedEntity = city.ToEntity();
-        updatedEntity.CityId = id;
-
-        context.Entry(existingCity).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingCity;
-    }
-
-    public async Task<ICity?> DeleteAsync(int id)
-    {
-        var city = await context.Cities.FindAsync(id);
-        if (city == null) return null;
-
-        context.Cities.Remove(city);
-        await context.SaveChangesAsync();
-
-        return city;
-    }
-
-    public Task<List<ICity>> GetByRegionIdAsync(int regionId)
-    {
-        throw new NotImplementedException();
+        public async Task<IEnumerable<ICity>> GetByRegionIdAsync(int regionId)
+        {
+            return await context.Cities
+                .Where(c => c.RegionId == regionId)
+                .Include(c => c.Region)
+                .ToListAsync();
+        }
     }
 }

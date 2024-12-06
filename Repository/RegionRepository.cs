@@ -1,60 +1,70 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class RegionRepository(PublishingHouseDbContext context) : IRegionRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IRegion>> GetAllAsync()
+    public class RegionRepository(PublishingHouseDbContext context) : IRegionRepository
     {
-        var regions = await context.Regions.ToListAsync();
+        public async Task AddAsync(IRegion entity)
+        {
+            if (entity is Region regionEntity)
+            {
+                await context.Regions.AddAsync(regionEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Region.");
+            }
+        }
 
-        return regions.Cast<IRegion>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var region = await context.Regions.FindAsync(id);
+            if (region is null)
+            {
+                throw new RepositoryException($"Region with id {id} was not found");
+            }
 
-    public async Task<IRegion?> GetByIdAsync(int id)
-    {
-        return await context.Regions
-            .FirstOrDefaultAsync(a => a.RegionId == id);
-    }
+            context.Regions.Remove(region);
+        }
 
-    public async Task<IRegion> AddAsync(IRegion region)
-    {
-        ArgumentNullException.ThrowIfNull(region, nameof(region));
+        public async Task<IEnumerable<IRegion>> GetAllAsync()
+        {
+            return await context.Regions.ToListAsync();
+        }
 
-        var entity = region.ToEntity();
-        await context.Regions.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IRegion> GetByIdAsync(int id)
+        {
+            var region = await context.Regions.FindAsync(id);
+            if (region is null)
+            {
+                throw new RepositoryException($"Region with id {id} was not found");
+            }
 
-        return entity;
-    }
+            return region;
+        }
 
-    public async Task<IRegion?> UpdateAsync(int id, IRegion region)
-    {
-        ArgumentNullException.ThrowIfNull(region, nameof(region));
+        public async Task UpdateAsync(int id, IRegion entity)
+        {
+            var existingRegion = await context.Regions.FindAsync(id);
+            if (existingRegion is null)
+            {
+                throw new RepositoryException($"Region with id {id} was not found.");
+            }
 
-        var existingRegion = await context.Regions.FindAsync(id);
-        if (existingRegion == null) return null;
-
-        var updatedEntity = region.ToEntity();
-        updatedEntity.RegionId = id;
-
-        context.Entry(existingRegion).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingRegion;
-    }
-
-    public async Task<IRegion?> DeleteAsync(int id)
-    {
-        var region = await context.Regions.FindAsync(id);
-        if (region == null) return null;
-
-        context.Regions.Remove(region);
-        await context.SaveChangesAsync();
-
-        return region;
+            if (entity is Region regionEntity)
+            {
+                existingRegion.Name = regionEntity.Name;
+                existingRegion.UpdateDateTime = regionEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Region.");
+            }
+        }
     }
 }

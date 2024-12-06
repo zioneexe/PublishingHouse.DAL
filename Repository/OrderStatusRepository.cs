@@ -1,65 +1,80 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class OrderStatusRepository(PublishingHouseDbContext context) : IOrderStatusRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IOrderStatus>> GetAllAsync()
+    public class OrderStatusRepository(PublishingHouseDbContext context) : IOrderStatusRepository
     {
-        var orderStatuses = await context.OrderStatuses.ToListAsync();
+        public async Task AddAsync(IOrderStatus entity)
+        {
+            if (entity is OrderStatus orderStatusEntity)
+            {
+                await context.OrderStatuses.AddAsync(orderStatusEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type OrderStatus.");
+            }
+        }
 
-        return orderStatuses.Cast<IOrderStatus>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var orderStatus = await context.OrderStatuses.FindAsync(id);
+            if (orderStatus is null)
+            {
+                throw new RepositoryException($"OrderStatus with id {id} was not found.");
+            }
 
-    public async Task<IOrderStatus?> GetByIdAsync(int id)
-    {
-        return await context.OrderStatuses
-            .FirstOrDefaultAsync(a => a.OrderStatusId == id);
-    }
+            context.OrderStatuses.Remove(orderStatus);
+        }
 
-    public async Task<IOrderStatus> AddAsync(IOrderStatus orderStatus)
-    {
-        ArgumentNullException.ThrowIfNull(orderStatus, nameof(orderStatus));
+        public async Task<IEnumerable<IOrderStatus>> GetAllAsync()
+        {
+            return await context.OrderStatuses.ToListAsync();
+        }
 
-        var entity = orderStatus.ToEntity();
-        await context.OrderStatuses.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IOrderStatus> GetByIdAsync(int id)
+        {
+            var orderStatus = await context.OrderStatuses.FindAsync(id);
+            if (orderStatus is null)
+            {
+                throw new RepositoryException($"OrderStatus with id {id} was not found.");
+            }
 
-        return entity;
-    }
+            return orderStatus;
+        }
 
-    public async Task<IOrderStatus?> UpdateAsync(int id, IOrderStatus orderStatus)
-    {
-        ArgumentNullException.ThrowIfNull(orderStatus, nameof(orderStatus));
+        public async Task UpdateAsync(int id, IOrderStatus entity)
+        {
+            var existingOrderStatus = await context.OrderStatuses.FindAsync(id);
+            if (existingOrderStatus is null)
+            {
+                throw new RepositoryException($"OrderStatus with id {id} was not found.");
+            }
 
-        var existingOrderStatus = await context.OrderStatuses.FindAsync(id);
-        if (existingOrderStatus == null) return null;
+            if (entity is OrderStatus orderStatusEntity)
+            {
+                existingOrderStatus.Name = orderStatusEntity.Name;
+                existingOrderStatus.UpdateDateTime = orderStatusEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type OrderStatus.");
+            }
+        }
 
-        var updatedEntity = orderStatus.ToEntity();
-        updatedEntity.OrderStatusId = id;
+        public async Task<IOrderStatus?> GetByNameAsync(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Order status name cannot be null or empty.", nameof(name));
 
-        context.Entry(existingOrderStatus).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
+            return await context.OrderStatuses
+                .FirstOrDefaultAsync(os => EF.Functions.Like(os.Name!, name));
+        }
 
-        return existingOrderStatus;
-    }
-
-    public async Task<IOrderStatus?> DeleteAsync(int id)
-    {
-        var orderStatus = await context.OrderStatuses.FindAsync(id);
-        if (orderStatus == null) return null;
-
-        context.OrderStatuses.Remove(orderStatus);
-        await context.SaveChangesAsync();
-
-        return orderStatus;
-    }
-
-    public Task<IOrderStatus?> GetByNameAsync(string name)
-    {
-        throw new NotImplementedException();
     }
 }

@@ -1,82 +1,137 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class PrintOrderRepository(PublishingHouseDbContext context) : IPrintOrderRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IPrintOrder>> GetAllAsync()
+    public class PrintOrderRepository(PublishingHouseDbContext context) : IPrintOrderRepository
     {
-        var printOrders = await context.PrintOrders
-            .Include(po => po.Customer)
-            .Include(po => po.Employee)
-            .Include(po => po.OrderStatus)
-            .ToListAsync();
+        public async Task AddAsync(IPrintOrder entity)
+        {
+            if (entity is PrintOrder printOrderEntity)
+            {
+                await context.PrintOrders.AddAsync(printOrderEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Order.");
+            }
+        }
 
-        return printOrders.Cast<IPrintOrder>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var printOrder = await context.PrintOrders
+                                 .Include(po => po.BatchPrints) 
+                                 .FirstOrDefaultAsync(po => po.OrderId == id)
+                             ?? throw new RepositoryException($"Order with id {id} was not found.");
 
-    public async Task<IPrintOrder?> GetByIdAsync(int id)
-    {
-        return await context.PrintOrders
-            .Include(po => po.Customer)
-            .Include(po => po.Employee)
-            .Include(po => po.OrderStatus)
-            .FirstOrDefaultAsync(po => po.OrderId == id);
-    }
+            if (printOrder.BatchPrints.Count != 0)
+            {
+                context.BatchPrints.RemoveRange(printOrder.BatchPrints);
+            }
 
-    public async Task<IPrintOrder> AddAsync(IPrintOrder printOrder)
-    {
-        ArgumentNullException.ThrowIfNull(printOrder, nameof(printOrder));
+            context.PrintOrders.Remove(printOrder);
+        }
 
-        var entity = printOrder.ToEntity();
-        await context.PrintOrders.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IEnumerable<IPrintOrder>> GetAllAsync()
+        {
+            return await context.PrintOrders
+                .Include(po => po.Customer)
+                .Include(po => po.Employee)
+                .Include(po => po.OrderStatus)
+                .ToListAsync();
+        }
 
-        return entity;
-    }
+        public async Task<IPrintOrder> GetByIdAsync(int id)
+        {
+            var printOrder = await context.PrintOrders
+                .Include(po => po.Customer)
+                .Include(po => po.Employee)
+                .Include(po => po.OrderStatus)
+                .FirstOrDefaultAsync(po => po.OrderId == id);
 
-    public async Task<IPrintOrder?> UpdateAsync(int id, IPrintOrder printOrder)
-    {
-        ArgumentNullException.ThrowIfNull(printOrder, nameof(printOrder));
+            return printOrder is null ? throw new RepositoryException($"Order with id {id} was not found.") : (IPrintOrder)printOrder;
+        }
 
-        var existingPrintOrder = await context.PrintOrders.FindAsync(id);
-        if (existingPrintOrder == null) return null;
+        public async Task UpdateAsync(int id, IPrintOrder entity)
+        {
+            var existingPrintOrder = await context.PrintOrders.FindAsync(id) ?? throw new RepositoryException($"Order with id {id} was not found.");
+            if (entity is PrintOrder printOrderEntity)
+            {
+                existingPrintOrder.Number = entity.Number;
+                existingPrintOrder.PrintType = entity.PrintType;
+                existingPrintOrder.PaperType = entity.PaperType;
+                existingPrintOrder.CoverType = entity.CoverType;
+                existingPrintOrder.FasteningType = entity.FasteningType;
+                existingPrintOrder.IsLaminated = entity.IsLaminated;
+                existingPrintOrder.Price = entity.Price;
+                existingPrintOrder.OrderStatusId = entity.OrderStatusId;
+                existingPrintOrder.RegistrationDate = entity.RegistrationDate;
+                existingPrintOrder.CompletionDate = entity.CompletionDate;
+                existingPrintOrder.CustomerId = entity.CustomerId;
+                existingPrintOrder.EmployeeId = entity.EmployeeId;
+                existingPrintOrder.UpdateDateTime = entity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Order.");
+            }
+        }
 
-        var updatedEntity = printOrder.ToEntity();
-        updatedEntity.OrderId = id;
+        public async Task<IEnumerable<IPrintOrder>> GetByCustomerIdAsync(int customerId)
+        {
+            return await context.PrintOrders
+                .Where(po => po.CustomerId == customerId)
+                .Include(po => po.Customer)
+                .Include(po => po.Employee)
+                .Include(po => po.OrderStatus)
+                .ToListAsync();
+        }
 
-        context.Entry(existingPrintOrder).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
+        public async Task<IEnumerable<IPrintOrder>> GetByEmployeeIdAsync(int employeeId)
+        {
+            return await context.PrintOrders
+                .Where(po => po.EmployeeId == employeeId)
+                .Include(po => po.Customer)
+                .Include(po => po.Employee)
+                .Include(po => po.OrderStatus)
+                .ToListAsync();
+        }
 
-        return existingPrintOrder;
-    }
+        public async Task<IEnumerable<IPrintOrder>> GetByOrderStatusIdAsync(int orderStatusId)
+        {
+            return await context.PrintOrders
+                .Where(po => po.OrderStatusId == orderStatusId)
+                .Include(po => po.Customer)
+                .Include(po => po.Employee)
+                .Include(po => po.OrderStatus)
+                .ToListAsync();
+        }
 
-    public async Task<IPrintOrder?> DeleteAsync(int id)
-    {
-        var printOrder = await context.PrintOrders.FindAsync(id);
-        if (printOrder == null) return null;
+        public async Task UpdateOrderStatusAsync(int orderId, IOrderStatus orderStatus)
+        {
+            var order = await GetByIdAsync(orderId);
+            if (order == null) throw new KeyNotFoundException($"Order with ID {orderId} not found.");
 
-        context.PrintOrders.Remove(printOrder);
-        await context.SaveChangesAsync();
+            order.OrderStatus = orderStatus;
+        }
 
-        return printOrder;
-    }
+        public async Task<int> AddWithIdAsync(IPrintOrder entity)
+        {
+            if (entity is PrintOrder printOrderEntity)
+            {
+                await context.PrintOrders.AddAsync(printOrderEntity);
+                await context.SaveChangesAsync();
 
-    public Task<List<IPrintOrder>> GetByCustomerIdAsync(int customerId)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<List<IPrintOrder>> GetByEmployeeIdAsync(int employeeId)
-    {
-        throw new NotImplementedException();
-    }
-
-    public Task<List<IPrintOrder>> GetByOrderStatusIdAsync(int orderStatusId)
-    {
-        throw new NotImplementedException();
+                return printOrderEntity.OrderId;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Order.");
+            }
+        }
     }
 }

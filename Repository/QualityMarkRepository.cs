@@ -1,60 +1,70 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class QualityMarkRepository(PublishingHouseDbContext context) : IQualityMarkRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IQualityMark>> GetAllAsync()
+    public class QualityMarkRepository(PublishingHouseDbContext context) : IQualityMarkRepository
     {
-        var qualityMarks = await context.QualityMarks.ToListAsync();
+        public async Task AddAsync(IQualityMark entity)
+        {
+            if (entity is QualityMark qualityMarkEntity)
+            {
+                await context.QualityMarks.AddAsync(qualityMarkEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type QualityMark.");
+            }
+        }
 
-        return qualityMarks.Cast<IQualityMark>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var qualityMark = await context.QualityMarks.FindAsync(id);
+            if (qualityMark is null)
+            {
+                throw new RepositoryException($"Quality mark with id {id} was not found");
+            }
 
-    public async Task<IQualityMark?> GetByIdAsync(int id)
-    {
-        return await context.QualityMarks
-            .FirstOrDefaultAsync(a => a.QualityMarkId == id);
-    }
+            context.QualityMarks.Remove(qualityMark);
+        }
 
-    public async Task<IQualityMark> AddAsync(IQualityMark qualityMark)
-    {
-        ArgumentNullException.ThrowIfNull(qualityMark, nameof(qualityMark));
+        public async Task<IEnumerable<IQualityMark>> GetAllAsync()
+        {
+            return await context.QualityMarks.ToListAsync();
+        }
 
-        var entity = qualityMark.ToEntity();
-        await context.QualityMarks.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IQualityMark> GetByIdAsync(int id)
+        {
+            var qualityMark = await context.QualityMarks.FindAsync(id);
+            if (qualityMark is null)
+            {
+                throw new RepositoryException($"Quality mark with id {id} was not found");
+            }
 
-        return entity;
-    }
+            return qualityMark;
+        }
 
-    public async Task<IQualityMark?> UpdateAsync(int id, IQualityMark qualityMark)
-    {
-        ArgumentNullException.ThrowIfNull(qualityMark, nameof(qualityMark));
+        public async Task UpdateAsync(int id, IQualityMark entity)
+        {
+            var existingQualityMark = await context.QualityMarks.FindAsync(id);
+            if (existingQualityMark is null)
+            {
+                throw new RepositoryException($"QualityMark with id {id} was not found.");
+            }
 
-        var existingQualityMark = await context.QualityMarks.FindAsync(id);
-        if (existingQualityMark == null) return null;
-
-        var updatedEntity = qualityMark.ToEntity();
-        updatedEntity.QualityMarkId = id;
-
-        context.Entry(existingQualityMark).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingQualityMark;
-    }
-
-    public async Task<IQualityMark?> DeleteAsync(int id)
-    {
-        var qualityMark = await context.QualityMarks.FindAsync(id);
-        if (qualityMark == null) return null;
-
-        context.QualityMarks.Remove(qualityMark);
-        await context.SaveChangesAsync();
-
-        return qualityMark;
+            if (entity is QualityMark qualityMarkEntity)
+            {
+                existingQualityMark.Name = qualityMarkEntity.Name;
+                existingQualityMark.UpdateDateTime = qualityMarkEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type QualityMark.");
+            }
+        }
     }
 }

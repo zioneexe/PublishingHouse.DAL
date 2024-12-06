@@ -1,60 +1,70 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class ProductionTypeRepository(PublishingHouseDbContext context) : IProductionTypeRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IProductionType>> GetAllAsync()
+    public class ProductionTypeRepository(PublishingHouseDbContext context) : IProductionTypeRepository
     {
-        var productionType = await context.ProductionTypes.ToListAsync();
+        public async Task AddAsync(IProductionType entity)
+        {
+            if (entity is ProductionType productionTypeEntity)
+            {
+                await context.ProductionTypes.AddAsync(productionTypeEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type ProductionType.");
+            }
+        }
 
-        return productionType.Cast<IProductionType>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var productionType = await context.ProductionTypes.FindAsync(id);
+            if (productionType is null)
+            {
+                throw new RepositoryException($"ProductionType with id {id} was not found.");
+            }
 
-    public async Task<IProductionType?> GetByIdAsync(int id)
-    {
-        return await context.ProductionTypes
-            .FirstOrDefaultAsync(a => a.ProductionTypeId == id);
-    }
+            context.ProductionTypes.Remove(productionType);
+        }
 
-    public async Task<IProductionType> AddAsync(IProductionType productionType)
-    {
-        ArgumentNullException.ThrowIfNull(productionType, nameof(productionType));
+        public async Task<IEnumerable<IProductionType>> GetAllAsync()
+        {
+            return await context.ProductionTypes.ToListAsync();
+        }
 
-        var entity = productionType.ToEntity();
-        await context.ProductionTypes.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IProductionType> GetByIdAsync(int id)
+        {
+            var productionType = await context.ProductionTypes.FindAsync(id);
+            if (productionType is null)
+            {
+                throw new RepositoryException($"ProductionType with id {id} was not found.");
+            }
 
-        return entity;
-    }
+            return productionType;
+        }
 
-    public async Task<IProductionType?> UpdateAsync(int id, IProductionType productionType)
-    {
-        ArgumentNullException.ThrowIfNull(productionType, nameof(productionType));
+        public async Task UpdateAsync(int id, IProductionType entity)
+        {
+            var existingProductionType = await context.ProductionTypes.FindAsync(id);
+            if (existingProductionType is null)
+            {
+                throw new RepositoryException($"ProductionType with id {id} was not found.");
+            }
 
-        var existingProductionType = await context.ProductionTypes.FindAsync(id);
-        if (existingProductionType == null) return null;
-
-        var updatedEntity = productionType.ToEntity();
-        updatedEntity.ProductionTypeId = id;
-
-        context.Entry(existingProductionType).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingProductionType;
-    }
-
-    public async Task<IProductionType?> DeleteAsync(int id)
-    {
-        var productionType = await context.ProductionTypes.FindAsync(id);
-        if (productionType == null) return null;
-
-        context.ProductionTypes.Remove(productionType);
-        await context.SaveChangesAsync();
-
-        return productionType;
+            if (entity is ProductionType productionTypeEntity)
+            {
+                existingProductionType.Name = productionTypeEntity.Name;
+                existingProductionType.UpdateDateTime = productionTypeEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type ProductionType.");
+            }
+        }
     }
 }

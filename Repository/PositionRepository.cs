@@ -1,65 +1,76 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class PositionRepository(PublishingHouseDbContext context) : IPositionRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IPosition>> GetAllAsync()
+    public class PositionRepository(PublishingHouseDbContext context) : IPositionRepository
     {
-        var positions = await context.Positions.ToListAsync();
+        public async Task AddAsync(IPosition entity)
+        {
+            if (entity is Position positionEntity)
+            {
+                await context.Positions.AddAsync(positionEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Position.");
+            }
+        }
 
-        return positions.Cast<IPosition>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var position = await context.Positions.FindAsync(id);
+            if (position is null)
+            {
+                throw new RepositoryException($"Position with id {id} was not found.");
+            }
 
-    public async Task<IPosition?> GetByIdAsync(int id)
-    {
-        return await context.Positions
-            .FirstOrDefaultAsync(a => a.PositionId == id);
-    }
+            context.Positions.Remove(position);
+        }
 
-    public async Task<IPosition> AddAsync(IPosition position)
-    {
-        ArgumentNullException.ThrowIfNull(position, nameof(position));
+        public async Task<IEnumerable<IPosition>> GetAllAsync()
+        {
+            return await context.Positions.ToListAsync();
+        }
 
-        var entity = position.ToEntity();
-        await context.Positions.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<IPosition> GetByIdAsync(int id)
+        {
+            var position = await context.Positions.FindAsync(id);
+            if (position is null)
+            {
+                throw new RepositoryException($"Position with id {id} was not found.");
+            }
 
-        return entity;
-    }
+            return position;
+        }
 
-    public async Task<IPosition?> UpdateAsync(int id, IPosition position)
-    {
-        ArgumentNullException.ThrowIfNull(position, nameof(position));
+        public async Task UpdateAsync(int id, IPosition entity)
+        {
+            var existingPosition = await context.Positions.FindAsync(id);
+            if (existingPosition is null)
+            {
+                throw new RepositoryException($"Position with id {id} was not found.");
+            }
 
-        var existingPosition = await context.Positions.FindAsync(id);
-        if (existingPosition == null) return null;
+            if (entity is Position positionEntity)
+            {
+                existingPosition.Name = positionEntity.Name;
+                existingPosition.UpdateDateTime = positionEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type Position.");
+            }
+        }
 
-        var updatedEntity = position.ToEntity();
-        updatedEntity.PositionId = id;
-
-        context.Entry(existingPosition).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingPosition;
-    }
-
-    public async Task<IPosition?> DeleteAsync(int id)
-    {
-        var position = await context.Positions.FindAsync(id);
-        if (position == null) return null;
-
-        context.Positions.Remove(position);
-        await context.SaveChangesAsync();
-
-        return position;
-    }
-
-    public Task<IPosition?> GetByNameAsync(string name)
-    {
-        throw new NotImplementedException();
+        public async Task<IPosition?> GetByNameAsync(string name)
+        {
+            return await context.Positions
+                .FirstOrDefaultAsync(p => p.Name == name);
+        }
     }
 }

@@ -1,60 +1,70 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class CustomerTypeRepository(PublishingHouseDbContext context) : ICustomerTypeRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<ICustomerType>> GetAllAsync()
+    public class CustomerTypeRepository(PublishingHouseDbContext context) : ICustomerTypeRepository
     {
-        var customerTypes = await context.CustomerTypes.ToListAsync();
+        public async Task AddAsync(ICustomerType entity)
+        {
+            if (entity is CustomerType customerTypeEntity)
+            {
+                await context.CustomerTypes.AddAsync(customerTypeEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type CustomerType.");
+            }
+        }
 
-        return customerTypes.Cast<ICustomerType>().ToList();
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var customerType = await context.CustomerTypes.FindAsync(id);
+            if (customerType is null)
+            {
+                throw new RepositoryException($"CustomerType with id {id} was not found.");
+            }
 
-    public async Task<ICustomerType?> GetByIdAsync(int id)
-    {
-        return await context.CustomerTypes
-            .FirstOrDefaultAsync(a => a.CustomerTypeId == id);
-    }
+            context.CustomerTypes.Remove(customerType);
+        }
 
-    public async Task<ICustomerType> AddAsync(ICustomerType customerType)
-    {
-        ArgumentNullException.ThrowIfNull(customerType, nameof(customerType));
+        public async Task<IEnumerable<ICustomerType>> GetAllAsync()
+        {
+            return await context.CustomerTypes.ToListAsync();
+        }
 
-        var entity = customerType.ToEntity();
-        await context.CustomerTypes.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task<ICustomerType> GetByIdAsync(int id)
+        {
+            var customerType = await context.CustomerTypes.FindAsync(id);
+            if (customerType is null)
+            {
+                throw new RepositoryException($"CustomerType with id {id} was not found.");
+            }
 
-        return entity;
-    }
+            return customerType;
+        }
 
-    public async Task<ICustomerType?> UpdateAsync(int id, ICustomerType customerType)
-    {
-        ArgumentNullException.ThrowIfNull(customerType, nameof(customerType));
+        public async Task UpdateAsync(int id, ICustomerType entity)
+        {
+            var existingCustomerType = await context.CustomerTypes.FindAsync(id);
+            if (existingCustomerType is null)
+            {
+                throw new RepositoryException($"CustomerType with id {id} was not found.");
+            }
 
-        var existingCustomerType = await context.CustomerTypes.FindAsync(id);
-        if (existingCustomerType == null) return null;
-
-        var updatedEntity = customerType.ToEntity();
-        updatedEntity.CustomerTypeId = id;
-
-        context.Entry(existingCustomerType).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
-
-        return existingCustomerType;
-    }
-
-    public async Task<ICustomerType?> DeleteAsync(int id)
-    {
-        var customerType = await context.CustomerTypes.FindAsync(id);
-        if (customerType == null) return null;
-
-        context.CustomerTypes.Remove(customerType);
-        await context.SaveChangesAsync();
-
-        return customerType;
+            if (entity is CustomerType customerTypeEntity)
+            {
+                existingCustomerType.Name = customerTypeEntity.Name;
+                existingCustomerType.UpdateDateTime = customerTypeEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type CustomerType.");
+            }
+        }
     }
 }

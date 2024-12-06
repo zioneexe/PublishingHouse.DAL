@@ -1,74 +1,111 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PublishingHouse.Abstractions.Model;
+using PublishingHouse.Abstractions.Entity;
+using PublishingHouse.Abstractions.Exception;
 using PublishingHouse.Abstractions.Repository;
-using PublishingHouse.DAL.Mapper;
+using PublishingHouse.DAL.Data;
+using PublishingHouse.DAL.Model;
 
-namespace PublishingHouse.DAL.Repository;
-
-public class OrderBookRepository(PublishingHouseDbContext context) : IOrderBookRepository
+namespace PublishingHouse.DAL.Repository
 {
-    public async Task<List<IOrderBook>> GetAllAsync()
+    public class OrderBookRepository(PublishingHouseDbContext context) : IOrderBookRepository
     {
-        var orderBooks = await context.OrderBooks
-            .Include(ob => ob.Order)
-            .Include(ob => ob.Book)
-            .ToListAsync();
-        return orderBooks.Cast<IOrderBook>().ToList();
-    }
+        public async Task AddAsync(IOrderBook entity)
+        {
+            if (entity is OrderBook orderBookEntity)
+            {
+                await context.OrderBooks.AddAsync(orderBookEntity);
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type OrderBook.");
+            }
+        }
 
-    public async Task<IOrderBook?> GetByIdAsync(int id)
-    {
-        return await context.OrderBooks
-            .Include(ob => ob.Order)
-            .Include(ob => ob.Book)
-            .FirstOrDefaultAsync(a => a.OrderBooksId == id);
-    }
+        public async Task DeleteAsync(int id)
+        {
+            var orderBook = await context.OrderBooks.FindAsync(id);
+            if (orderBook is null)
+            {
+                throw new RepositoryException($"OrderBook with id {id} was not found.");
+            }
 
-    public async Task<IOrderBook> AddAsync(IOrderBook orderBook)
-    {
-        ArgumentNullException.ThrowIfNull(orderBook, nameof(orderBook));
+            context.OrderBooks.Remove(orderBook);
+        }
 
-        var entity = orderBook.ToEntity();
-        await context.OrderBooks.AddAsync(entity);
-        await context.SaveChangesAsync();
+        public async Task DeleteByOrderIdAsync(int orderId)
+        {
+            var orderBooks = context.OrderBooks.Where(ob => ob.OrderId == orderId).ToList();
 
-        return entity;
-    }
+            if (orderBooks.Count == 0)
+            {
+                return;
+            }
 
-    public async Task<IOrderBook?> UpdateAsync(int id, IOrderBook orderBook)
-    {
-        ArgumentNullException.ThrowIfNull(orderBook, nameof(orderBook));
+            context.OrderBooks.RemoveRange(orderBooks);
 
-        var existingOrderBook = await context.OrderBooks.FindAsync(id);
-        if (existingOrderBook == null) return null;
+            await context.SaveChangesAsync();
+        }
 
-        var updatedEntity = orderBook.ToEntity();
-        updatedEntity.OrderBooksId = id;
+        public async Task<IEnumerable<IOrderBook>> GetByOrderIdAsync(int orderId)
+        {
+            return await context.OrderBooks
+                .Where(ob => ob.OrderId == orderId)
+                .Include(ob => ob.Order)
+                .Include(ob => ob.Book)
+                .ToListAsync();
+        }
 
-        context.Entry(existingOrderBook).CurrentValues.SetValues(updatedEntity);
-        await context.SaveChangesAsync();
+        public async Task<IEnumerable<IOrderBook>> GetAllAsync()
+        {
+            return await context.OrderBooks
+                .Include(ob => ob.Order)
+                .Include(ob => ob.Book)
+                .ToListAsync();
+        }
 
-        return existingOrderBook;
-    }
+        public async Task<IOrderBook> GetByIdAsync(int id)
+        {
+            var orderBook = await context.OrderBooks
+                .Include(ob => ob.Order)
+                .Include(ob => ob.Book)
+                .FirstOrDefaultAsync(ob => ob.OrderBooksId == id);
 
-    public async Task<IOrderBook?> DeleteAsync(int id)
-    {
-        var orderBook = await context.OrderBooks.FindAsync(id);
-        if (orderBook == null) return null;
+            if (orderBook is null)
+            {
+                throw new RepositoryException($"OrderBook with id {id} was not found.");
+            }
 
-        context.OrderBooks.Remove(orderBook);
-        await context.SaveChangesAsync();
+            return orderBook;
+        }
 
-        return orderBook;
-    }
+        public async Task UpdateAsync(int id, IOrderBook entity)
+        {
+            var existingOrderBook = await context.OrderBooks.FindAsync(id);
+            if (existingOrderBook is null)
+            {
+                throw new RepositoryException($"OrderBook with id {id} was not found.");
+            }
 
-    public Task<List<IOrderBook>> GetOrderBooksByOrderIdAsync(int orderId)
-    {
-        throw new NotImplementedException();
-    }
+            if (entity is OrderBook orderBookEntity)
+            {
+                existingOrderBook.OrderId = orderBookEntity.OrderId;
+                existingOrderBook.BookId = orderBookEntity.BookId;
+                existingOrderBook.BookQuantity = orderBookEntity.BookQuantity;
+                existingOrderBook.UpdateDateTime = orderBookEntity.UpdateDateTime;
+            }
+            else
+            {
+                throw new InvalidOperationException("The provided entity is not of type OrderBook.");
+            }
+        }
 
-    public Task<List<IOrderBook>> GetOrderBooksByBookIdAsync(int bookId)
-    {
-        throw new NotImplementedException();
+        public async Task<IEnumerable<IOrderBook>> GetOrderBooksByOrderIdAsync(int orderId)
+        {
+            return await context.OrderBooks
+                .Where(ob => ob.OrderId == orderId)
+                .Include(ob => ob.Order)
+                .Include(ob => ob.Book)
+                .ToListAsync();
+        }
     }
 }
