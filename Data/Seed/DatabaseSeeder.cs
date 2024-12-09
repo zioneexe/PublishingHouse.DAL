@@ -20,9 +20,32 @@ namespace PublishingHouse.DAL.Data.Seed
             var authContext = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
             var publishingContext = scope.ServiceProvider.GetRequiredService<PublishingHouseDbContext>();
 
+            await WaitForDatabaseReady(authContext);
+            await WaitForDatabaseReady(publishingContext);
+
             await SeedRoles(authContext);
             await SeedUsersAndEmployees(userManager, publishingContext);
         }
+
+        private static async Task WaitForDatabaseReady(DbContext context, int maxRetries = 10, int delayMs = 5000)
+        {
+            for (int retry = 0; retry < maxRetries; retry++)
+            {
+                try
+                {
+                    if (await context.Database.CanConnectAsync())
+                    {
+                        return; 
+                    }
+                }
+                catch
+                {
+                }
+                await Task.Delay(delayMs);
+            }
+            throw new Exception("Database is not ready after multiple retries.");
+        }
+
 
         private static async Task SeedRoles(AuthDbContext context)
         {
